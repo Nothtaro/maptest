@@ -1,8 +1,9 @@
 package io.github.nothtaro.maptest.core.listener;
 
-import io.github.nothtaro.maptest.core.IMapThread;
-import io.github.nothtaro.maptest.core.MapTask;
 import io.github.nothtaro.maptest.core.MapThread;
+import io.github.nothtaro.maptest.core.MapGraphic;
+import io.github.nothtaro.maptest.core.MapTask;
+import io.github.nothtaro.maptest.core.MapThreader;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
@@ -19,10 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CommandListener implements CommandExecutor {
-    List<IMapThread> threadList = new ArrayList<>();
-    IMapThread mapThread = new MapThread();
+    List<MapThread> threadList = new ArrayList<>();
+    MapThread mapThread = new MapThreader();
 
-
+    TestMapView view = new TestMapView();
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -31,9 +32,16 @@ public class CommandListener implements CommandExecutor {
             if(args.length > 0) {
                 switch (args[0]) {
                     case "start" : {
-                        //threadList.add(new MapThread().start(0,20,null));
-                        mapThread.start(0,current -> {
-
+                        this.view.run(0,20,graphics -> {
+                            graphics.setColor(Color.BLACK);
+                            for(int x = 0; x <= 127; x++) {
+                                for (int y = 0; y <= 127; y++) {
+                                    graphics.fillRect(0,0,x,y);
+                                }
+                            }
+                            graphics.setColor(Color.WHITE);
+                            graphics.drawString("UNTIIII", 25,25);
+                            graphics.drawString("" + System.currentTimeMillis(), 25,50);
                         });
                         break;
                     }
@@ -41,6 +49,7 @@ public class CommandListener implements CommandExecutor {
                     case "stop" : {
                         if(args.length > 1 && Integer.decode(args[1]) != null) {
                             Bukkit.broadcastMessage(Integer.decode(args[1]).toString());
+                            Bukkit.getScheduler().cancelTask(Integer.decode(args[1]));
                         } else {
                             mapThread.stop();
                         }
@@ -58,15 +67,23 @@ public class CommandListener implements CommandExecutor {
                             MapMeta mapMeta = (MapMeta) inMainHand.getItemMeta();
                             MapView view = mapMeta.getMapView();
                             mapMeta.getMapView().removeRenderer(mapMeta.getMapView().getRenderers().get(0));
-                            mapMeta.getMapView().addRenderer(new TestMapView());
-                            player.sendMap(view);
-                            player.sendMessage("マップをAWTグラフィックに置換します" + mapMeta);
+                            mapMeta.getMapView().addRenderer(this.view);
+                            player.sendMessage("マップをAWTグラフィックに置換します");
                         }
                     }
 
                     case "list" : {
-                        for (IMapThread thread: threadList) {
+                        for (MapThread thread: threadList) {
                             Bukkit.broadcastMessage(String.valueOf(thread.getID()));
+                        }
+                        break;
+                    }
+
+                    case "pause" : {
+                        if(this.view.getThread().isPaused()) {
+                            this.view.getThread().pause(false);
+                        } else {
+                            this.view.getThread().pause(true);
                         }
                         break;
                     }
@@ -78,56 +95,33 @@ public class CommandListener implements CommandExecutor {
     }
 
     class TestMapView extends MapRenderer {
-        int ballX = 15;
-        int ballY = 40;
-
-        int ballXMove = 2;
-        int ballYMove = 2;
-
-        //グラフィックけい
-        private final Image image;
-        private Graphics graphics = null;
-        //マップタイミングけい
-        private IMapThread mapThread = new MapThread();
-        private MapTask mapTask = current -> {
-            Bukkit.broadcastMessage("RENDERING");
-            if(graphics != null) {
-                graphics.setColor(Color.WHITE);
-                graphics.fillRect(0,0,128,128);
-
-                graphics.setColor(Color.GREEN);
-
-                if(ballX + 10 > 128 || ballX < 0) {
-                    ballXMove *= -1;
-                }
-                if (ballY + 10 > 128 || ballY < 0) {
-                    ballYMove *= -1;
-                }
-
-                ballX += ballXMove;
-                ballY += ballYMove;
-
-                graphics.fillRect(ballX,ballY,10,10);
-            }
-        };
+        private Image image = null;
+        private final Graphics g;
+        private final MapGraphic graphic = null;
+        private final MapThread thread = new MapThreader();
 
         private TestMapView() {
             image = new BufferedImage(128,128,BufferedImage.TYPE_INT_RGB);
-            this.graphics = image.getGraphics();
-            mapThread.start(0,mapTask);
-            Bukkit.broadcastMessage("スレッド ID: " + mapThread.getID());
+            this.g = image.getGraphics();
+        }
+
+        public void run(int delay, int period, MapGraphic mapGraphic) {
+            MapTask task = current -> {
+                if(g != null) {
+                    mapGraphic.render(g);
+                }
+            };
+            thread.start(delay, period, task);
+            Bukkit.broadcastMessage("スレッド ID: " + thread.getID() + " で開始します");
+        }
+
+        public MapThread getThread() {
+            return this.thread;
         }
 
         @Override
         public void render(MapView map, MapCanvas canvas, Player player) {
-            /*
-            for(int x = 0; x <= 128-1; x++) {
-                for (int y = 0; y <= 128-1; y++) {
-                    canvas.setPixel(x,y, MapPalette.BLUE);
-                }
-            }*/
             canvas.drawImage(0,0,image);
-            //canvas.drawText(0,0, MinecraftFont.Font,String.valueOf(System.currentTimeMillis()));
         }
     }
 }
